@@ -47,19 +47,16 @@ struct ContentView: View {
     
     var body: some View {
         Map() {
+            
+            
             // Show other users' locations
             ForEach(otherLocations) { location in
-                Annotation("Other", coordinate: location.coordinate) {
-                    Circle()
-                        .fill((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red : .blue)
-                        .frame(width: 20, height: 20)
-                        .overlay(
-                            Circle()
-                                .stroke(.white, lineWidth: 2)
-                        )
-                }
+                MapCircle(center: location.coordinate, radius: 100)
+                    .foregroundStyle((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red.opacity(0.5) : .blue.opacity(0.5))
+                        .mapOverlayLevel(level: .aboveRoads)
             }
         }
+        .mapStyle(.standard(pointsOfInterest: []))
         .ignoresSafeArea()
         .overlay(
             VStack {
@@ -76,7 +73,7 @@ struct ContentView: View {
                         .cornerRadius(10)
                 }
             }
-            .padding(),
+                .padding(),
             alignment: .top
         )
         .onReceive(locationManager.$lastLocation) { location in
