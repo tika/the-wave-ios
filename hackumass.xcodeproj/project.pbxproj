@@ -40,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3A40851A2CDFC72D006C1EB3 /* GoogleMaps in Frameworks */,
 				3AE097322CDFB38400210FC3 /* MapboxMaps in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -92,6 +93,7 @@
 			name = hackumass;
 			packageProductDependencies = (
 				3AE097312CDFB38400210FC3 /* MapboxMaps */,
+				3A4085192CDFC72D006C1EB3 /* GoogleMaps */,
 			);
 			productName = hackumass;
 			productReference = 3A768D6D2CDF9A7000D5EE97 /* hackumass.app */;
@@ -123,6 +125,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				3AE097302CDFB38400210FC3 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				3A4085182CDFC72D006C1EB3 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3A768D6E2CDF9A7000D5EE97 /* Products */;
@@ -358,6 +361,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		3A4085182CDFC72D006C1EB3 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 9.1.1;
+			};
+		};
 		3AE097302CDFB38400210FC3 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios.git";
@@ -369,6 +380,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		3A4085192CDFC72D006C1EB3 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3A4085182CDFC72D006C1EB3 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
+		};
 		3AE097312CDFB38400210FC3 /* MapboxMaps */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3AE097302CDFB38400210FC3 /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
