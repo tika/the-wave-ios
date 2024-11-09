@@ -42,44 +42,56 @@ struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
     @State private var otherLocations: [Location] = []
     @State private var lastError: String?
+    @State private var path = NavigationPath()
     
     let apiBaseURL = "http://127.0.0.1:5000/api/location"  // Make sure to update this
     
     var body: some View {
-        Map() {
-            
-            
-            // Show other users' locations
-            ForEach(otherLocations) { location in
-                MapCircle(center: location.coordinate, radius: 100)
-                    .foregroundStyle((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red.opacity(0.5) : .blue.opacity(0.5))
+        NavigationStack(path: $path){
+            Map() {
+                // Show other users' locations
+                ForEach(otherLocations) { location in
+                    MapCircle(center: location.coordinate, radius: 100)
+                        .foregroundStyle((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red.opacity(0.5) : .blue.opacity(0.5))
                         .mapOverlayLevel(level: .aboveRoads)
+                }
             }
-        }
-        .mapStyle(.standard(pointsOfInterest: []))
-        .ignoresSafeArea()
-        .overlay(
-            VStack {
-                Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
-                    .padding()
-                    .background(.white.opacity(0.7))
-                    .cornerRadius(10)
-                
-                if let error = lastError {
-                    Text(error)
-                        .foregroundColor(.red)
+            .mapStyle(.standard(pointsOfInterest: []))
+            .mapControls({})
+            .ignoresSafeArea()
+            .overlay(
+                VStack {
+                    Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
                         .padding()
                         .background(.white.opacity(0.7))
                         .cornerRadius(10)
+                    
+                    if let error = lastError {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .padding()
+                            .background(.white.opacity(0.7))
+                            .cornerRadius(10)
+                    }
+                }
+                    .padding(),
+                alignment: .top
+            )
+            .toolbar{
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SettingsView()) {
+                    Image(systemName: "gear")
+                            .foregroundColor(.white)
+                    }
                 }
             }
-                .padding(),
-            alignment: .top
-        )
-        .onReceive(locationManager.$lastLocation) { location in
-            if let location = location {
-                Task {
-                    await sendLocationUpdate(location: location)
+        
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .onReceive(locationManager.$lastLocation) { location in
+                if let location = location {
+                    Task {
+                        await sendLocationUpdate(location: location)
+                    }
                 }
             }
         }
@@ -129,6 +141,68 @@ struct ContentView: View {
             await MainActor.run {
                 lastError = "Error: \(error.localizedDescription)"
             }
+        }
+    }
+}
+
+// The settings tab
+struct SettingsView: View {
+    @State private var isGhostModeEnabled = false
+    @State private var areNotificationsEnabled = false
+    @State private var showDeleteConfirmation = false
+    
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Ghost Mode", isOn: $isGhostModeEnabled)
+            } footer: {
+                Text("Ghost mode stops you from being seen")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+            
+            Section {
+                Toggle("Notifications", isOn: $areNotificationsEnabled)
+            } footer: {
+                Text("You will receive notifications when near ripples")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+            
+            Section {
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Text("Delete Account")
+                        .foregroundColor(.red)
+                }
+            }
+            
+            Section {
+                NavigationLink("Terms of Service") {
+                    Text("Terms of Service Content")
+                }
+                
+                NavigationLink("Privacy Policy") {
+                    Text("Privacy Policy Content")
+                }
+            }
+            
+            // Static version number at the bottom
+            Section {
+                Text("Version 1.0")
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .navigationTitle("Settings")
+        .alert("Delete Account", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                // Add delete account logic here
+            }
+        } message: {
+            Text("Are you sure you want to delete your account? This action cannot be undone.")
         }
     }
 }
