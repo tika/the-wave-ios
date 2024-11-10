@@ -15,7 +15,7 @@ struct RippleView: MapContent {
     let position: CLLocationCoordinate2D
 
     var rippleScale: Double {
-        10 * log(Double(population)) + 50
+        10 * log(Double(population)) + 5
     }
 
     var body: some MapContent {

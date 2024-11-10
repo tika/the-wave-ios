@@ -45,7 +45,7 @@ struct ContentView: View {
 
     @State private var path = NavigationPath()
 
-    let apiBaseURL = "http://127.0.0.1:5000/api/location"  // Make sure to update this
+    let apiBaseURL = "https://the-wave-backend.onrender.com/api/location"  // Make sure to update this
 
     let METRES_PAN = 5000.0;
 
@@ -67,7 +67,7 @@ struct ContentView: View {
             ) {
                 // Show other users' locations
                 ForEach(otherLocations) { location in
-                    RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
+                    RippleView(population: 1, color: .red, position: location.coordinate)
                 }
             }
             .mapStyle(.standard(pointsOfInterest: []))
@@ -165,14 +165,18 @@ struct ContentView: View {
 
 // The settings tab
 struct SettingsView: View {
-    @State private var isGhostModeEnabled = false
-    @State private var areNotificationsEnabled = false
+    @AppStorage("isGhostModeEnabled") private var isGhostModeEnabled = false
+    @AppStorage("areNotificationsEnabled") private var areNotificationsEnabled = false
     @State private var showDeleteConfirmation = false
+    
 
     var body: some View {
         Form {
             Section {
                 Toggle("Ghost Mode", isOn: $isGhostModeEnabled)
+                    .onChange(of: isGhostModeEnabled) {
+                        oldValue, newValue in
+                    }
             } footer: {
                 Text("Ghost mode stops you from being seen")
                     .font(.footnote)
@@ -181,6 +185,15 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Notifications", isOn: $areNotificationsEnabled)
+                    .onChange(of: areNotificationsEnabled) {
+                        oldValue, newValue in
+                        if newValue {
+                            requestNotificationPermissions()
+                        }
+                        else {
+                            revokeNotificationPermissions()
+                        }
+                    }
             } footer: {
                 Text("You will receive notifications when near ripples")
                     .font(.footnote)
@@ -221,6 +234,22 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to delete your account? This action cannot be undone.")
+        }
+    }
+}
+
+private func requestNotificationPermissions() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { success, error in
+        if let error = error {
+            print("Error requesting notifications: \(error)")
+        }
+    }
+}
+
+private func revokeNotificationPermissions() {
+    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+        Task { @MainActor in
+            UIApplication.shared.open(settingsUrl)
         }
     }
 }
