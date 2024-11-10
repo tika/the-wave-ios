@@ -54,6 +54,7 @@ struct ContentView: View {
                     MapCircle(center: location.coordinate, radius: 100)
                         .foregroundStyle((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red.opacity(0.5) : .blue.opacity(0.5))
                         .mapOverlayLevel(level: .aboveRoads)
+                    RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
                 }
             }
             .mapStyle(.standard(pointsOfInterest: []))
