@@ -15,34 +15,36 @@ struct RippleView: MapContent {
     let position: CLLocationCoordinate2D
 
     var rippleScale: Double {
-        10 * log(Double(population)) + 50
+        population == 1 ? 5 : (10 * Double(population) + 50)
     }
 
     var body: some MapContent {
-        MapCircle(center: position, radius: rippleScale * animator.scale)
+        MapCircle(center: position, radius: rippleScale * 0.5 * animator.scale1 + 20)
             .foregroundStyle(color.opacity(0.5))
             .mapOverlayLevel(level: .aboveRoads)
     }
 }
 
 class RippleAnimator: ObservableObject {
-    @Published var scale: Double = 1.0
+    @Published var scale1: Double = 0.5
+    @Published var scale2: Double = 0.5
     private var timer: Timer?
-    private var ascending = true
 
     init() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
-            self?.updateScale()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
+            self?.updateScales()
         }
     }
 
-    private func updateScale() {
-        if ascending {
-            scale += 0.01
-            if scale >= 1.3 { ascending = false }
-        } else {
-            scale -= 0.01
-            if scale <= 0.7 { ascending = true }
+    private func updateScales() {
+        scale1 += 0.02
+        scale2 += 0.02
+
+        if scale1 >= 2.0 {
+            scale1 = 0.5
+        }
+        if scale2 >= 2.0 {
+            scale2 = 0.5
         }
     }
 
@@ -52,7 +54,8 @@ class RippleAnimator: ObservableObject {
 }
 
 #Preview {
-    Map() {
+    Map {
         RippleView(population: 5, color: .red, position: CLLocationCoordinate2D(latitude: 5, longitude: 5))
     }
+    .mapStyle(.standard)
 }

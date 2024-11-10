@@ -9,11 +9,10 @@ import SwiftUI
 
 @main
 struct TheWaveApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(\.font, .authorVariable(size: 16))
                 .environment(\.colorScheme, .dark)
         }
     }

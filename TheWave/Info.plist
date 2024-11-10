@@ -6,6 +6,11 @@
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 	<key>MGLMapboxMetricsEnabledSettingShownInApp</key>
 	<true/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Author.ttf</string>
+		<string>ClashDisplay.ttf</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

@@ -4,7 +4,7 @@ import CoreLocation
 
 class RippleState: ObservableObject {
     static let shared = RippleState()
-    
+
     @Published var rippleLocations: [RippleLocation] = []
     @Published var lastError: String?
 }
@@ -25,9 +25,9 @@ struct RippleDaata: Codable {
 
 // The ripple response
 struct RippleData: Codable {
-    let message: String
+    let message: String?
     let nearbyRipples: [RippleDaata]
-    let ripple_id: String?  // Optional since it's not always present
+    let ripple_id: String? // The ripple we've joined
 }
 
 struct RippleOrigin: Codable {
@@ -44,6 +44,7 @@ struct CoordinateData: Codable {
 struct RippleLocation: Identifiable, Decodable {
     let id: String
     let coordinate: CLLocationCoordinate2D
+    let memberCount: Int
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -54,16 +55,21 @@ struct RippleLocation: Identifiable, Decodable {
             latitude: origin.coordinates[0],
             longitude: origin.coordinates[1]
         )
+
+        let members = try container.decode([String].self, forKey: .members)
+        self.memberCount = members.count
     }
 
     private enum CodingKeys: String, CodingKey {
         case id
         case origin
+        case members
     }
 
-    init(id: String, coordinate: CLLocationCoordinate2D) {
+    init(id: String, coordinate: CLLocationCoordinate2D, memberCount: Int) {
         self.id = id
         self.coordinate = coordinate
+        self.memberCount = memberCount
     }
 }
 
@@ -83,6 +89,7 @@ struct ContentView: View {
         @StateObject private var rippleState = RippleState.shared
         @AppStorage("isPartyModeEnabled") private var isPartyModeEnabled = false
         @State private var path = NavigationPath()
+        @State private var cameraPosition: MapCameraPosition = .region(.init(center: CLLocationCoordinate2D(), span: MKCoordinateSpan()))
 
         let METRES_PAN = 5000.0
 
@@ -93,28 +100,66 @@ struct ContentView: View {
             )
         }
 
+
+        init(){
+            for family in UIFont.familyNames {
+                 print(family)
+
+                 for names in UIFont.fontNames(forFamilyName: family){
+                 print("== \(names)")
+                 }
+            }
+        }
+
         var body: some View {
             NavigationStack(path: $path) {
                 Map(
+                    position: $cameraPosition,
                     bounds: MapCameraBounds(
                         centerCoordinateBounds: MKMapRect(
                             origin: MKMapPoint(userLocation),
                             size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
                         ),
-                        minimumDistance: 100,
-                        maximumDistance: 1000
+                        minimumDistance: 1000,
+                        maximumDistance: 2500
                     )
                 ) {
                     // Now use rippleState.rippleLocations
                     ForEach(rippleState.rippleLocations) { location in
-                        RippleView(population: 1, color: .red, position: location.coordinate)
+                        RippleView(
+                            population: location.memberCount,
+                            color: rippleColors[abs(location.id.hashValue) % rippleColors.count],
+                            position: location.coordinate
+                        )
+                    }
+
+                    // Show user's location with a blue dot and pulse effect
+                    if let location = locationManager.lastLocation {
+                        RippleView(
+                            population: 1,
+                            color: .blue,
+                            position: location.coordinate
+                        )
+
+                        // Add a central dot for precise location
+                        Annotation("Me", coordinate: location.coordinate) {
+                            Circle()
+                                .fill(.blue)
+                                .frame(width: 12, height: 12)
+                                .overlay(
+                                    Circle()
+                                        .stroke(.white, lineWidth: 2)
+                                )
+                        }
                     }
                 }
+                .mapControlVisibility(.hidden)
                 .mapStyle(.standard(pointsOfInterest: []))
                 .ignoresSafeArea()
                 .overlay(
                     VStack {
                         Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
+                            // .font(.authorVariable(size: 16))
                             .padding()
                             .background(.white.opacity(0.7))
                             .cornerRadius(10)
@@ -151,6 +196,14 @@ struct ContentView: View {
                         await ContentView.sendLocationUpdate(location: location, partyMode: isPartyModeEnabled)
                     }
                 }
+            }
+            .onAppear {
+                cameraPosition = .camera(MapCamera(
+                    centerCoordinate: userLocation,
+                    distance: 500,
+                    heading: 0,
+                    pitch: 45
+                ))
             }
         }
     }
@@ -191,10 +244,14 @@ struct ContentView: View {
 
                 let locations = try JSONDecoder().decode(RippleData.self, from: data)
                     .nearbyRipples.map { ripple in
-                        RippleLocation(id: ripple._id, coordinate: CLLocationCoordinate2D(
-                            latitude: ripple.origin.coordinates[0],
-                            longitude: ripple.origin.coordinates[1]
-                        ))
+                        RippleLocation(
+                            id: ripple._id,
+                            coordinate: CLLocationCoordinate2D(
+                                latitude: ripple.origin.coordinates[0],
+                                longitude: ripple.origin.coordinates[1]
+                            ),
+                            memberCount: ripple.members.count
+                        )
                     }
                 print("Decoded \(locations.count) locations")
 
@@ -358,7 +415,7 @@ struct InfoRow: View {
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                    Text(title)
                     .font(.headline)
                 Text(description)
                     .font(.subheadline)
@@ -392,5 +449,41 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
+    }
+}
+
+// Add this at the top of ContentView or in a separate Colors extension file
+private let rippleColors: [Color] = [
+    Color(hex: "1A00E2"),  // Blue
+    Color(hex: "00E2DE"),  // Cyan
+    Color(hex: "155FFF"),  // Light Blue
+    Color(hex: "0B116B"),  // Dark Blue
+    Color(hex: "5C00FA")   // Purple
+]
+
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }
