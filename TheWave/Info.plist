@@ -6,5 +6,9 @@
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 	<key>MGLMapboxMetricsEnabledSettingShownInApp</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

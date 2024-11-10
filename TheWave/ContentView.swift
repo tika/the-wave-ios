@@ -2,12 +2,37 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
+class RippleState: ObservableObject {
+    static let shared = RippleState()
+    
+    @Published var rippleLocations: [RippleLocation] = []
+    @Published var lastError: String?
+}
+
 // Request models remain the same
 struct LocationRequest: Codable {
     let userID: String
     let location: CoordinateData
-    let preference: String
-    let emoji: String
+    let partyMode: Bool
+}
+
+// The actual ripple
+struct RippleDaata: Codable {
+    let _id: String
+    let members: [String]
+    let origin: RippleOrigin
+}
+
+// The ripple response
+struct RippleData: Codable {
+    let message: String
+    let nearbyRipples: [RippleDaata]
+    let ripple_id: String?  // Optional since it's not always present
+}
+
+struct RippleOrigin: Codable {
+    let coordinates: [Double]
+    let type: String
 }
 
 struct CoordinateData: Codable {
@@ -15,81 +40,96 @@ struct CoordinateData: Codable {
     let latitude: Double
 }
 
-// New response model to match the API format
-struct LocationResponse: Codable {
-    let location: [Double]
-
-    var coordinate: CLLocationCoordinate2D {
-        // API sends [longitude, latitude]
-        CLLocationCoordinate2D(
-            latitude: location[1],
-            longitude: location[0]
-        )
-    }
-}
-
 // Display model
-struct Location: Identifiable {
-    let id = UUID()
+struct RippleLocation: Identifiable, Decodable {
+    let id: String
     let coordinate: CLLocationCoordinate2D
 
-    init(from response: LocationResponse) {
-        self.coordinate = response.coordinate
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+
+        let origin = try container.decode(RippleOrigin.self, forKey: .origin)
+        self.coordinate = CLLocationCoordinate2D(
+            latitude: origin.coordinates[0],
+            longitude: origin.coordinates[1]
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case origin
+    }
+
+    init(id: String, coordinate: CLLocationCoordinate2D) {
+        self.id = id
+        self.coordinate = coordinate
     }
 }
+
+//struct Location: Identifiable {
+//    let id = UUID()
+//    let coordinate: CLLocationCoordinate2D
+//
+//    init(from response: LocationResponse) {
+//        self.coordinate = response.coordinate
+//    }
+//}
+
+let apiBaseURL = "https://the-wave-backend.onrender.com/api/location"
 
 struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
-    @State private var otherLocations: [Location] = []
-    @State private var lastError: String?
+        @StateObject private var rippleState = RippleState.shared
+        @AppStorage("isPartyModeEnabled") private var isPartyModeEnabled = false
+        @State private var path = NavigationPath()
 
-    @State private var path = NavigationPath()
+        let METRES_PAN = 5000.0
 
-    let apiBaseURL = "http://127.0.0.1:5000/api/location"  // Make sure to update this
+        var userLocation: CLLocationCoordinate2D {
+            CLLocationCoordinate2D(
+                latitude: locationManager.lastLocation?.coordinate.latitude ?? 0 + (METRES_PAN * 0.001),
+                longitude: locationManager.lastLocation?.coordinate.longitude ?? 0 + (METRES_PAN * 0.001)
+            )
+        }
 
-    let METRES_PAN = 5000.0;
-
-    var userLocation: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: locationManager.lastLocation?.coordinate.latitude ?? 0 + (METRES_PAN * 0.001), longitude: locationManager.lastLocation?.coordinate.longitude ?? 0 + (METRES_PAN * 0.001))
-    }
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            Map(
-                bounds: MapCameraBounds(
-                    centerCoordinateBounds: MKMapRect(
-                        origin: MKMapPoint(userLocation),
-                        size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
-                    ),
-                    minimumDistance: 100,
-                    maximumDistance: 1000
-                )
-            ) {
-                // Show other users' locations
-                ForEach(otherLocations) { location in
-                    RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
+        var body: some View {
+            NavigationStack(path: $path) {
+                Map(
+                    bounds: MapCameraBounds(
+                        centerCoordinateBounds: MKMapRect(
+                            origin: MKMapPoint(userLocation),
+                            size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
+                        ),
+                        minimumDistance: 100,
+                        maximumDistance: 1000
+                    )
+                ) {
+                    // Now use rippleState.rippleLocations
+                    ForEach(rippleState.rippleLocations) { location in
+                        RippleView(population: 1, color: .red, position: location.coordinate)
+                    }
                 }
-            }
-            .mapStyle(.standard(pointsOfInterest: []))
-            .ignoresSafeArea()
-            .overlay(
-                VStack {
-                    Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
-                        .padding()
-                        .background(.white.opacity(0.7))
-                        .cornerRadius(10)
-                    
-                    if let error = lastError {
-                        Text(error)
-                            .foregroundColor(.red)
+                .mapStyle(.standard(pointsOfInterest: []))
+                .ignoresSafeArea()
+                .overlay(
+                    VStack {
+                        Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
                             .padding()
                             .background(.white.opacity(0.7))
                             .cornerRadius(10)
+
+                        if let error = rippleState.lastError {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .padding()
+                                .background(.white.opacity(0.7))
+                                .cornerRadius(10)
+                        }
                     }
-                }
                     .padding(),
-                alignment: .top
-            )
+                    alignment: .top
+                )
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink(destination: InfoView()) {
@@ -104,83 +144,105 @@ struct ContentView: View {
                     }
                 }
             }
-            
             .toolbarBackground(.hidden, for: .navigationBar)
             .onReceive(locationManager.$lastLocation) { location in
                 if let location = location {
                     Task {
-                        await sendLocationUpdate(location: location)
+                        await ContentView.sendLocationUpdate(location: location, partyMode: isPartyModeEnabled)
                     }
                 }
             }
         }
     }
 
-    func sendLocationUpdate(location: CLLocation) async {
-        guard let url = URL(string: apiBaseURL) else { return }
 
-        let requestBody = LocationRequest(
-            userID: locationManager.deviceID,
-            location: CoordinateData(
-                longitude: location.coordinate.longitude,
-                latitude: location.coordinate.latitude
-            ),
-            preference: "test string",
-            emoji: "test emoji"
-        )
+    static func sendLocationUpdate(location: CLLocation, partyMode: Bool) async {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "HH:mm:ss.SSS"
+            let timestamp = dateFormatter.string(from: Date())
+            print("📍 [\(timestamp)] Sending location update - Lat: \(location.coordinate.latitude), Lon: \(location.coordinate.longitude)")
 
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(locationManager.deviceID, forHTTPHeaderField: "userID")
+            guard let url = URL(string: apiBaseURL) else { return }
 
-            let jsonData = try JSONEncoder().encode(requestBody)
-            print("Sending request:", String(data: jsonData, encoding: .utf8) ?? "")
-            request.httpBody = jsonData
+            let requestBody = LocationRequest(
+                userID: LocationManager.deviceID,
+                location: CoordinateData(
+                    longitude: location.coordinate.longitude,
+                    latitude: location.coordinate.latitude
+                ),
+                partyMode: partyMode
+            )
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            do {
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue(LocationManager.deviceID, forHTTPHeaderField: "userID")
 
-            // Print response for debugging
-            if let httpResponse = response as? HTTPURLResponse {
-                print("Response status:", httpResponse.statusCode)
-            }
-            print("Response data:", String(data: data, encoding: .utf8) ?? "")
+                let jsonData = try JSONEncoder().encode(requestBody)
+                request.httpBody = jsonData
 
-            let locations = try JSONDecoder().decode([LocationResponse].self, from: data)
-            print("Decoded \(locations.count) locations")
+                let (data, response) = try await URLSession.shared.data(for: request)
 
-            await MainActor.run {
-                otherLocations = locations.map { Location(from: $0) }
-                lastError = nil
-            }
-        } catch {
-            print("Error sending location update: \(error)")
-            await MainActor.run {
-                lastError = "Error: \(error.localizedDescription)"
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("Response status:", httpResponse.statusCode)
+                }
+                print("Response data:", String(data: data, encoding: .utf8) ?? "")
+
+                let locations = try JSONDecoder().decode(RippleData.self, from: data)
+                    .nearbyRipples.map { ripple in
+                        RippleLocation(id: ripple._id, coordinate: CLLocationCoordinate2D(
+                            latitude: ripple.origin.coordinates[0],
+                            longitude: ripple.origin.coordinates[1]
+                        ))
+                    }
+                print("Decoded \(locations.count) locations")
+
+                await MainActor.run {
+                    RippleState.shared.rippleLocations = locations
+                    RippleState.shared.lastError = nil
+                    print("Updated rippleLocations count: \(RippleState.shared.rippleLocations.count)")
+                }
+            } catch {
+                print("Error sending location update: \(error)")
+                await MainActor.run {
+                    RippleState.shared.rippleLocations = []
+                    RippleState.shared.lastError = "Error: \(error.localizedDescription)"
+                }
             }
         }
-    }
 }
 
 // The settings tab
 struct SettingsView: View {
-    @State private var isGhostModeEnabled = false
-    @State private var areNotificationsEnabled = false
+    @AppStorage("isPartyModeEnabled") private var isPartyModeEnabled = false
+    @AppStorage("areNotificationsEnabled") private var areNotificationsEnabled = false
     @State private var showDeleteConfirmation = false
 
     var body: some View {
         Form {
             Section {
-                Toggle("Ghost Mode", isOn: $isGhostModeEnabled)
+                Toggle("Party Mode", isOn: $isPartyModeEnabled)
+                    .onChange(of: isPartyModeEnabled) {
+                        oldValue, newValue in
+                    }
             } footer: {
-                Text("Ghost mode stops you from being seen")
+                Text("Party mode allows you to join ripples")
                     .font(.footnote)
                     .foregroundColor(.gray)
             }
 
             Section {
                 Toggle("Notifications", isOn: $areNotificationsEnabled)
+                    .onChange(of: areNotificationsEnabled) {
+                        oldValue, newValue in
+                        if newValue {
+                            requestNotificationPermissions()
+                        }
+                        else {
+                            revokeNotificationPermissions()
+                        }
+                    }
             } footer: {
                 Text("You will receive notifications when near ripples")
                     .font(.footnote)
@@ -221,6 +283,22 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to delete your account? This action cannot be undone.")
+        }
+    }
+}
+
+private func requestNotificationPermissions() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { success, error in
+        if let error = error {
+            print("Error requesting notifications: \(error)")
+        }
+    }
+}
+
+private func revokeNotificationPermissions() {
+    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+        Task { @MainActor in
+            UIApplication.shared.open(settingsUrl)
         }
     }
 }
@@ -294,7 +372,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var locationManager = CLLocationManager()
     @Published var lastLocation: CLLocation?
 
-    var deviceID: String {
+    static var deviceID: String {
         return UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
     }
 
