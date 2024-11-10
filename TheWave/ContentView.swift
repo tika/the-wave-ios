@@ -54,43 +54,43 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path){
-        Map(
-            bounds: MapCameraBounds(
-                centerCoordinateBounds: MKMapRect(
-                    origin: MKMapPoint(userLocation),
-                    size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
-                ),
-                minimumDistance: 100,
-                maximumDistance: 1000
-            )
-        ) {
-            // Show other users' locations
-            ForEach(otherLocations) { location in
-                RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
+        NavigationStack(path: $path) {
+            Map(
+                bounds: MapCameraBounds(
+                    centerCoordinateBounds: MKMapRect(
+                        origin: MKMapPoint(userLocation),
+                        size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
+                    ),
+                    minimumDistance: 100,
+                    maximumDistance: 1000
+                )
+            ) {
+                // Show other users' locations
+                ForEach(otherLocations) { location in
+                    RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
+                }
             }
-        }
-        .mapStyle(.standard(pointsOfInterest: []))
-        .ignoresSafeArea()
-        .overlay(
-            VStack {
-                Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
-                    .padding()
-                    .background(.white.opacity(0.7))
-                    .cornerRadius(10)
-
-                if let error = lastError {
-                    Text(error)
-                        .foregroundColor(.red)
+            .mapStyle(.standard(pointsOfInterest: []))
+            .ignoresSafeArea()
+            .overlay(
+                VStack {
+                    Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
                         .padding()
                         .background(.white.opacity(0.7))
                         .cornerRadius(10)
+                    
+                    if let error = lastError {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .padding()
+                            .background(.white.opacity(0.7))
+                            .cornerRadius(10)
+                    }
                 }
-            }
-                .padding(),
-            alignment: .top
-        )
-         .toolbar {
+                    .padding(),
+                alignment: .top
+            )
+            .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink(destination: InfoView()) {
                         Image(systemName: "info.circle")
@@ -99,17 +99,18 @@ struct ContentView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: SettingsView()) {
-                    Image(systemName: "gear")
+                        Image(systemName: "gear")
                             .foregroundColor(.white)
                     }
                 }
             }
-
+            
             .toolbarBackground(.hidden, for: .navigationBar)
-        .onReceive(locationManager.$lastLocation) { location in
-            if let location = location {
-                Task {
-                    await sendLocationUpdate(location: location)
+            .onReceive(locationManager.$lastLocation) { location in
+                if let location = location {
+                    Task {
+                        await sendLocationUpdate(location: location)
+                    }
                 }
             }
         }
