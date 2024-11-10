@@ -18,7 +18,7 @@ struct CoordinateData: Codable {
 // New response model to match the API format
 struct LocationResponse: Codable {
     let location: [Double]
-    
+
     var coordinate: CLLocationCoordinate2D {
         // API sends [longitude, latitude]
         CLLocationCoordinate2D(
@@ -32,7 +32,7 @@ struct LocationResponse: Codable {
 struct Location: Identifiable {
     let id = UUID()
     let coordinate: CLLocationCoordinate2D
-    
+
     init(from response: LocationResponse) {
         self.coordinate = response.coordinate
     }
@@ -42,16 +42,28 @@ struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
     @State private var otherLocations: [Location] = []
     @State private var lastError: String?
-    
+
     let apiBaseURL = "http://127.0.0.1:5000/api/location"  // Make sure to update this
-    
+
+    let METRES_PAN = 5000.0;
+
+    var userLocation: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: locationManager.lastLocation?.coordinate.latitude ?? 0 + (METRES_PAN * 0.001), longitude: locationManager.lastLocation?.coordinate.longitude ?? 0 + (METRES_PAN * 0.001))
+    }
+
     var body: some View {
-        Map() {
+        Map(
+            bounds: MapCameraBounds(
+                centerCoordinateBounds: MKMapRect(
+                    origin: MKMapPoint(userLocation),
+                    size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
+                ),
+                minimumDistance: 100,
+                maximumDistance: 1000
+            )
+        ) {
             // Show other users' locations
             ForEach(otherLocations) { location in
-//                MapCircle(center: location.coordinate, radius: 100)
-//                    .foregroundStyle((location.coordinate.latitude == locationManager.lastLocation?.coordinate.latitude && location.coordinate.longitude == locationManager.lastLocation?.coordinate.longitude) ? .red.opacity(0.5) : .blue.opacity(0.5))
-//                        .mapOverlayLevel(level: .aboveRoads)
                 RippleView(population: Int.random(in: 1...50), color: .red, position: location.coordinate)
             }
         }
@@ -63,7 +75,7 @@ struct ContentView: View {
                     .padding()
                     .background(.white.opacity(0.7))
                     .cornerRadius(10)
-                
+
                 if let error = lastError {
                     Text(error)
                         .foregroundColor(.red)
@@ -83,10 +95,10 @@ struct ContentView: View {
             }
         }
     }
-    
+
     func sendLocationUpdate(location: CLLocation) async {
         guard let url = URL(string: apiBaseURL) else { return }
-        
+
         let requestBody = LocationRequest(
             userID: locationManager.deviceID,
             location: CoordinateData(
@@ -96,33 +108,32 @@ struct ContentView: View {
             preference: "test string",
             emoji: "test emoji"
         )
-        
+
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue(locationManager.deviceID, forHTTPHeaderField: "userID")
-            
+
             let jsonData = try JSONEncoder().encode(requestBody)
             print("Sending request:", String(data: jsonData, encoding: .utf8) ?? "")
             request.httpBody = jsonData
-            
+
             let (data, response) = try await URLSession.shared.data(for: request)
-            
+
             // Print response for debugging
             if let httpResponse = response as? HTTPURLResponse {
                 print("Response status:", httpResponse.statusCode)
             }
             print("Response data:", String(data: data, encoding: .utf8) ?? "")
-            
+
             let locations = try JSONDecoder().decode([LocationResponse].self, from: data)
             print("Decoded \(locations.count) locations")
-            
+
             await MainActor.run {
                 otherLocations = locations.map { Location(from: $0) }
                 lastError = nil
             }
-            
         } catch {
             print("Error sending location update: \(error)")
             await MainActor.run {
@@ -135,16 +146,16 @@ struct ContentView: View {
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var locationManager = CLLocationManager()
     @Published var lastLocation: CLLocation?
-    
+
     var deviceID: String {
         return UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
     }
-    
+
     override init() {
         super.init()
         setupLocationManager()
     }
-    
+
     private func setupLocationManager() {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
@@ -152,7 +163,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         lastLocation = location
