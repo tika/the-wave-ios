@@ -94,10 +94,7 @@ struct ContentView: View {
         let METRES_PAN = 5000.0
 
         var userLocation: CLLocationCoordinate2D {
-            CLLocationCoordinate2D(
-                latitude: locationManager.lastLocation?.coordinate.latitude ?? 0 + (METRES_PAN * 0.001),
-                longitude: locationManager.lastLocation?.coordinate.longitude ?? 0 + (METRES_PAN * 0.001)
-            )
+            locationManager.lastLocation?.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
         }
 
         init(){
@@ -116,12 +113,13 @@ struct ContentView: View {
                     Map(
                         position: $cameraPosition,
                         bounds: MapCameraBounds(
-                            centerCoordinateBounds: MKMapRect(
-                                origin: MKMapPoint(userLocation),
-                                size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
+                            centerCoordinateBounds: MKCoordinateRegion(
+                                center: userLocation,
+                                latitudinalMeters: METRES_PAN * 2,
+                                longitudinalMeters: METRES_PAN * 2
                             ),
                             minimumDistance: 1000,
-                            maximumDistance: 2500
+                            maximumDistance: METRES_PAN * 2
                         )
                     ) {
                         // Now use rippleState.rippleLocations
@@ -158,16 +156,21 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                     VStack {
-                        Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
+                        Text("🤗 You joined a ripple")
                             .padding()
-                            .background(.white.opacity(0.7))
+                            .bold()
+                            .background(.regularMaterial)
                             .cornerRadius(10)
+//                        Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
+//                            .padding()
+//                            .background(.regularMaterial)
+//                            .cornerRadius(10)
 
                         if let error = rippleState.lastError {
-                            Text(error)
-                                .foregroundColor(.red)
+                            Text("⚠️ \(error)")
                                 .padding()
-                                .background(.white.opacity(0.7))
+                                .bold()
+                                .background(.regularMaterial)
                                 .cornerRadius(10)
                         }
 
@@ -191,6 +194,7 @@ struct ContentView: View {
                         NavigationLink(destination: SettingsView()) {
                             Image(systemName: "gear")
                                 .foregroundColor(.white)
+
                         }
                     }
                 }
@@ -203,12 +207,32 @@ struct ContentView: View {
                     }
                 }
                 .onAppear {
+                    // Ensure location updates are started
+                    locationManager.startUpdatingLocation()
+
+                    // Set initial camera position centered on user
                     cameraPosition = .camera(MapCamera(
                         centerCoordinate: userLocation,
-                        distance: 500,
+                        distance: METRES_PAN,
                         heading: 0,
-                        pitch: 45
+                        pitch: 0
                     ))
+                }
+                .onDisappear {
+                    // Optionally stop updates when view disappears
+                    locationManager.stopUpdatingLocation()
+                }
+                // Update camera position when location changes
+                .onChange(of: locationManager.lastLocation) { _, newLocation in
+                    guard let location = newLocation else { return }
+                    withAnimation {
+                        cameraPosition = .camera(MapCamera(
+                            centerCoordinate: location.coordinate,
+                            distance: METRES_PAN,
+                            heading: 0,
+                            pitch: 0
+                        ))
+                    }
                 }
             }
         }
@@ -247,17 +271,32 @@ struct ContentView: View {
                 }
                 print("Response data:", String(data: data, encoding: .utf8) ?? "")
 
-                let locations = try JSONDecoder().decode(RippleData.self, from: data)
-                    .nearbyRipples.map { ripple in
-                        RippleLocation(
-                            id: ripple._id,
-                            coordinate: CLLocationCoordinate2D(
-                                latitude: ripple.origin.coordinates[0],
-                                longitude: ripple.origin.coordinates[1]
-                            ),
-                            memberCount: ripple.members.count
-                        )
+                let rippleData = try JSONDecoder().decode(RippleData.self, from: data)
+
+                // Check if we joined a ripple
+                if let rippleId = rippleData.ripple_id {
+                    await MainActor.run {
+                        HapticManager.shared.joinedRipple()
                     }
+                }
+
+                // Check if there's a message about nearby ripples
+                if let message = rippleData.message, message.contains("nearby") {
+                    await MainActor.run {
+                        HapticManager.shared.nearbyRipple()
+                    }
+                }
+
+                let locations = rippleData.nearbyRipples.map { ripple in
+                    RippleLocation(
+                        id: ripple._id,
+                        coordinate: CLLocationCoordinate2D(
+                            latitude: ripple.origin.coordinates[0],
+                            longitude: ripple.origin.coordinates[1]
+                        ),
+                        memberCount: ripple.members.count
+                    )
+                }
                 print("Decoded \(locations.count) locations")
 
                 await MainActor.run {
@@ -433,6 +472,7 @@ struct InfoRow: View {
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var locationManager = CLLocationManager()
     @Published var lastLocation: CLLocation?
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
     static var deviceID: String {
         return UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
@@ -447,13 +487,50 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 10
-        locationManager.requestWhenInUseAuthorization()
+        locationManager.allowsBackgroundLocationUpdates = true // If you want background updates
+        locationManager.pausesLocationUpdatesAutomatically = false
+        checkLocationAuthorization()
+    }
+
+    func startUpdatingLocation() {
+        print("Starting location updates")
+        checkLocationAuthorization()
         locationManager.startUpdatingLocation()
     }
 
+    func stopUpdatingLocation() {
+        print("Stopping location updates")
+        locationManager.stopUpdatingLocation()
+    }
+
+    private func checkLocationAuthorization() {
+        switch locationManager.authorizationStatus {
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+        case .restricted, .denied:
+            // Handle unauthorized state
+            print("Location access denied")
+        case .authorizedWhenInUse, .authorizedAlways:
+            locationManager.startUpdatingLocation()
+        @unknown default:
+            break
+        }
+    }
+
+    // Delegate methods
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        print("📍 Location updated: \(location.coordinate)")
         lastLocation = location
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Location manager failed with error: \(error.localizedDescription)")
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationStatus = manager.authorizationStatus
+        checkLocationAuthorization()
     }
 }
 

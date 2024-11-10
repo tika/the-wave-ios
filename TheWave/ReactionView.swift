@@ -22,7 +22,7 @@ struct ReactionView: View {
             }
             .rotationEffect(.degrees(expanded ? 45 : 0))
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, expanded ? 12 : 8)
         .padding(.horizontal, 8)
         .background {
             RoundedRectangle(cornerRadius: 25)
@@ -30,7 +30,7 @@ struct ReactionView: View {
         }
         .frame(maxHeight: .infinity, alignment: .bottom)
         .padding(.trailing, 16)
-        .padding(.bottom, 32)
+        .padding(.bottom, 24)
     }
 }
 
@@ -56,7 +56,7 @@ struct ReactionButton: View {
             Text(emoji)
                 .font(.system(size: 24))
                 .padding(8)
-                .background(Circle().fill(.white))
+                .background(Circle().fill(.black))
                 .scaleEffect(isPressed ? 1.2 : 1.0)
         }
     }
