@@ -100,7 +100,6 @@ struct ContentView: View {
             )
         }
 
-
         init(){
             for family in UIFont.familyNames {
                  print(family)
@@ -113,53 +112,53 @@ struct ContentView: View {
 
         var body: some View {
             NavigationStack(path: $path) {
-                Map(
-                    position: $cameraPosition,
-                    bounds: MapCameraBounds(
-                        centerCoordinateBounds: MKMapRect(
-                            origin: MKMapPoint(userLocation),
-                            size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
-                        ),
-                        minimumDistance: 1000,
-                        maximumDistance: 2500
-                    )
-                ) {
-                    // Now use rippleState.rippleLocations
-                    ForEach(rippleState.rippleLocations) { location in
-                        RippleView(
-                            population: location.memberCount,
-                            color: rippleColors[abs(location.id.hashValue) % rippleColors.count],
-                            position: location.coordinate
+                ZStack {
+                    Map(
+                        position: $cameraPosition,
+                        bounds: MapCameraBounds(
+                            centerCoordinateBounds: MKMapRect(
+                                origin: MKMapPoint(userLocation),
+                                size: MKMapSize(width: METRES_PAN * 2, height: METRES_PAN * 2)
+                            ),
+                            minimumDistance: 1000,
+                            maximumDistance: 2500
                         )
-                    }
+                    ) {
+                        // Now use rippleState.rippleLocations
+                        ForEach(rippleState.rippleLocations) { location in
+                            RippleView(
+                                population: location.memberCount,
+                                color: rippleColors[abs(location.id.hashValue) % rippleColors.count],
+                                position: location.coordinate
+                            )
+                        }
 
-                    // Show user's location with a blue dot and pulse effect
-                    if let location = locationManager.lastLocation {
-                        RippleView(
-                            population: 1,
-                            color: .blue,
-                            position: location.coordinate
-                        )
+                        // Show user's location with a blue dot and pulse effect
+                        if let location = locationManager.lastLocation {
+                            RippleView(
+                                population: 1,
+                                color: .blue,
+                                position: location.coordinate
+                            )
 
-                        // Add a central dot for precise location
-                        Annotation("Me", coordinate: location.coordinate) {
-                            Circle()
-                                .fill(.blue)
-                                .frame(width: 12, height: 12)
-                                .overlay(
-                                    Circle()
-                                        .stroke(.white, lineWidth: 2)
-                                )
+                            // Add a central dot for precise location
+                            Annotation("Me", coordinate: location.coordinate) {
+                                Circle()
+                                    .fill(.blue)
+                                    .frame(width: 12, height: 12)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(.white, lineWidth: 2)
+                                    )
+                            }
                         }
                     }
-                }
-                .mapControlVisibility(.hidden)
-                .mapStyle(.standard(pointsOfInterest: []))
-                .ignoresSafeArea()
-                .overlay(
+                    .mapControlVisibility(.hidden)
+                    .mapStyle(.standard(pointsOfInterest: []))
+                    .ignoresSafeArea()
+
                     VStack {
                         Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
-                            // .font(.authorVariable(size: 16))
                             .padding()
                             .background(.white.opacity(0.7))
                             .cornerRadius(10)
@@ -171,42 +170,48 @@ struct ContentView: View {
                                 .background(.white.opacity(0.7))
                                 .cornerRadius(10)
                         }
+
+                        Spacer()
+
+                        HStack {
+                            Spacer()
+                            ReactionView()
+                        }
                     }
-                    .padding(),
-                    alignment: .top
-                )
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    NavigationLink(destination: InfoView()) {
-                        Image(systemName: "info.circle")
-                            .foregroundColor(.white)
+                    .padding()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        NavigationLink(destination: InfoView()) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.white)
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        NavigationLink(destination: SettingsView()) {
+                            Image(systemName: "gear")
+                                .foregroundColor(.white)
+                        }
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: SettingsView()) {
-                        Image(systemName: "gear")
-                            .foregroundColor(.white)
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .onReceive(locationManager.$lastLocation) { location in
+                    if let location = location {
+                        Task {
+                            await ContentView.sendLocationUpdate(location: location, partyMode: isPartyModeEnabled)
+                        }
                     }
                 }
-            }
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .onReceive(locationManager.$lastLocation) { location in
-                if let location = location {
-                    Task {
-                        await ContentView.sendLocationUpdate(location: location, partyMode: isPartyModeEnabled)
-                    }
+                .onAppear {
+                    cameraPosition = .camera(MapCamera(
+                        centerCoordinate: userLocation,
+                        distance: 500,
+                        heading: 0,
+                        pitch: 45
+                    ))
                 }
-            }
-            .onAppear {
-                cameraPosition = .camera(MapCamera(
-                    centerCoordinate: userLocation,
-                    distance: 500,
-                    heading: 0,
-                    pitch: 45
-                ))
             }
         }
-    }
 
 
     static func sendLocationUpdate(location: CLLocation, partyMode: Bool) async {

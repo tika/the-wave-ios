@@ -17,7 +17,7 @@ extension Font {
     static func clashDisplayVariable(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         switch weight {
         case .bold:
-            return .custom("ClashDisplayVariable-Bold_Bold", size: size)
+            return .custom("ClashDisplayVariable-Bold", size: size)
         case .semibold:
             return .custom("ClashDisplayVariable-Bold_semibold", size: size)
         case .medium:
