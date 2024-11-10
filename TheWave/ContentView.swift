@@ -43,6 +43,8 @@ struct ContentView: View {
     @State private var otherLocations: [Location] = []
     @State private var lastError: String?
 
+    @State private var path = NavigationPath()
+
     let apiBaseURL = "http://127.0.0.1:5000/api/location"  // Make sure to update this
 
     let METRES_PAN = 5000.0;
@@ -52,6 +54,7 @@ struct ContentView: View {
     }
 
     var body: some View {
+        NavigationStack(path: $path){
         Map(
             bounds: MapCameraBounds(
                 centerCoordinateBounds: MKMapRect(
@@ -87,6 +90,22 @@ struct ContentView: View {
                 .padding(),
             alignment: .top
         )
+         .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    NavigationLink(destination: InfoView()) {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.white)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SettingsView()) {
+                    Image(systemName: "gear")
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+
+            .toolbarBackground(.hidden, for: .navigationBar)
         .onReceive(locationManager.$lastLocation) { location in
             if let location = location {
                 Task {
@@ -138,6 +157,133 @@ struct ContentView: View {
             print("Error sending location update: \(error)")
             await MainActor.run {
                 lastError = "Error: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+// The settings tab
+struct SettingsView: View {
+    @State private var isGhostModeEnabled = false
+    @State private var areNotificationsEnabled = false
+    @State private var showDeleteConfirmation = false
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Ghost Mode", isOn: $isGhostModeEnabled)
+            } footer: {
+                Text("Ghost mode stops you from being seen")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+
+            Section {
+                Toggle("Notifications", isOn: $areNotificationsEnabled)
+            } footer: {
+                Text("You will receive notifications when near ripples")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+
+            Section {
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Text("Delete Account")
+                        .foregroundColor(.red)
+                }
+            }
+
+            Section {
+                NavigationLink("Terms of Service") {
+                    Text("Terms of Service Content")
+                }
+
+                NavigationLink("Privacy Policy") {
+                    Text("Privacy Policy Content")
+                }
+            }
+
+            // Static version number at the bottom
+            Section {
+                Text("Version 1.0")
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .navigationTitle("Settings")
+        .alert("Delete Account", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                // Add delete account logic here
+            }
+        } message: {
+            Text("Are you sure you want to delete your account? This action cannot be undone.")
+        }
+    }
+}
+
+// The info tab
+struct InfoView: View {
+    var body: some View {
+        Form {
+            Section(header: Text("About The Wave")) {
+                Text("The Wave is a social discovery app that helps you find and connect with people around you through digital ripples.")
+                    .padding(.vertical, 8)
+            }
+
+            Section(header: Text("How It Works")) {
+                VStack(alignment: .leading, spacing: 12) {
+                    InfoRow(icon: "location.circle.fill",
+                           title: "Location Sharing",
+                           description: "Share your location to create ripples that others can see")
+
+                    InfoRow(icon: "wave.3.right",
+                           title: "Ripples",
+                           description: "See ripples from other users in your area")
+
+                    InfoRow(icon: "bell.fill",
+                           title: "Notifications",
+                           description: "Get notified when you're near other users' ripples")
+                }
+                .padding(.vertical, 8)
+            }
+
+            Section(header: Text("Contact")) {
+                Link("Email Support", destination: URL(string: "mailto:support@thewaveapp.com")!)
+                Link("Twitter", destination: URL(string: "https://twitter.com/thewaveapp")!)
+                Link("Website", destination: URL(string: "https://thewaveapp.com")!)
+            }
+
+            Section {
+                Text("Made in HackUMass 2024")
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .foregroundColor(.gray)
+            }
+        }
+        .navigationTitle("Information")
+    }
+}
+
+struct InfoRow: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 15) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(.blue)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
             }
         }
     }
