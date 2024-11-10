@@ -7,6 +7,8 @@ class RippleState: ObservableObject {
 
     @Published var rippleLocations: [RippleLocation] = []
     @Published var lastError: String?
+    @Published var currentRippleId: String?
+    @Published var showJoinedMessage = false
 }
 
 // Request models remain the same
@@ -155,19 +157,26 @@ struct ContentView: View {
                     .mapStyle(.standard(pointsOfInterest: []))
                     .ignoresSafeArea()
 
-                    VStack {
-                        Text("🤗 You joined a ripple")
-                            .padding()
-                            .bold()
-                            .background(.regularMaterial)
-                            .cornerRadius(10)
-//                        Text("Lat: \(locationManager.lastLocation?.coordinate.latitude ?? 0), Lon: \(locationManager.lastLocation?.coordinate.longitude ?? 0)")
-//                            .padding()
-//                            .background(.regularMaterial)
-//                            .cornerRadius(10)
+                    VStack(spacing: 16) {
+                        Color.clear.frame(height: 50)
 
                         if let error = rippleState.lastError {
                             Text("⚠️ \(error)")
+                                .padding()
+                                .bold()
+                                .background(.regularMaterial)
+                                .cornerRadius(10)
+                        }
+
+                        if rippleState.showJoinedMessage {
+                            Text("🤗 You joined a ripple")
+                                .padding()
+                                .bold()
+                                .background(.regularMaterial)
+                                .cornerRadius(10)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        } else if rippleState.currentRippleId != nil {
+                            Text("🌊 You're in a ripple")
                                 .padding()
                                 .bold()
                                 .background(.regularMaterial)
@@ -181,7 +190,9 @@ struct ContentView: View {
                             ReactionView()
                         }
                     }
-                    .padding()
+                    .padding(.top, 60)
+                    .padding(.horizontal)
+                    .animation(.spring(response: 0.3), value: rippleState.showJoinedMessage)
                 }
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -276,6 +287,7 @@ struct ContentView: View {
                 // Check if we joined a ripple
                 if let rippleId = rippleData.ripple_id {
                     await MainActor.run {
+                        // We should now know if we're in a ripple
                         HapticManager.shared.joinedRipple()
                     }
                 }
