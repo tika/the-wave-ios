@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import AudioToolbox
 
 class RippleState: ObservableObject {
     static let shared = RippleState()
@@ -40,6 +41,10 @@ struct RippleOrigin: Codable {
 struct CoordinateData: Codable {
     let longitude: Double
     let latitude: Double
+}
+
+func runSound() {
+    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
 }
 
 // Display model
@@ -92,6 +97,7 @@ struct ContentView: View {
         @AppStorage("isPartyModeEnabled") private var isPartyModeEnabled = false
         @State private var path = NavigationPath()
         @State private var cameraPosition: MapCameraPosition = .region(.init(center: CLLocationCoordinate2D(), span: MKCoordinateSpan()))
+        @State private var showingShareSheet = false
 
         let METRES_PAN = 5000.0
 
@@ -158,8 +164,7 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                     VStack(spacing: 16) {
-                        Color.clear.frame(height: 50)
-
+//                        Color.clear.frame(height: 50)
                         if let error = rippleState.lastError {
                             Text("⚠️ \(error)")
                                 .padding()
@@ -168,27 +173,45 @@ struct ContentView: View {
                                 .cornerRadius(10)
                         }
 
+
                         if rippleState.showJoinedMessage {
-                            Text("🤗 You joined a ripple")
-                                .padding()
-                                .bold()
-                                .background(.regularMaterial)
-                                .cornerRadius(10)
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                            Text("You joined a ripple")
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(8)
+                                // .frame(maxWidth: .infinity, alignment: .trailing)
+                                .padding(.top, 60) // Adjust for status bar
+                                .padding(.horizontal, 16)
+                                .transition(.opacity)
                         } else if rippleState.currentRippleId != nil {
-                            Text("🌊 You're in a ripple")
-                                .padding()
-                                .bold()
-                                .background(.regularMaterial)
-                                .cornerRadius(10)
+                            ZStack {
+                                Text("You're in a ripple")
+                                    .padding()
+                                    .bold()
+                                    .background(.regularMaterial)
+                                    .cornerRadius(16)
+                            }
+                            .padding(.horizontal)
                         }
 
-                        Spacer()
+                        HStack(alignment: .center) {
+//                            Button {
+//                                showingShareSheet.toggle()
+//                            } label: {
+//                                Image(systemName: "square.and.arrow.up")
+//                                    .font(.system(size: 24))
+//                                    .padding(12)
+//                                    .background(Circle().fill(.black))
+//                                    .foregroundColor(.white)
+//                            }
 
-                        HStack {
                             Spacer()
+
                             ReactionView()
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
                     }
                     .padding(.top, 60)
                     .padding(.horizontal)
@@ -246,6 +269,9 @@ struct ContentView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingShareSheet) {
+                ShareView(isPresented: $showingShareSheet, userLocation: userLocation)
+            }
         }
 
 
@@ -286,9 +312,18 @@ struct ContentView: View {
 
                 // Check if we joined a ripple
                 if let rippleId = rippleData.ripple_id {
+                    // PRESENT USER WITH MESSAGE SAYING THEY ARE IN A RIPPLE
+
                     await MainActor.run {
-                        // We should now know if we're in a ripple
-                        HapticManager.shared.joinedRipple()
+                        RippleState.shared.currentRippleId = rippleId
+                        RippleState.shared.showJoinedMessage = true
+
+                        // Hide the message after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation {
+                                RippleState.shared.showJoinedMessage = false
+                            }
+                        }
                     }
                 }
 
@@ -579,5 +614,21 @@ extension Color {
             blue:  Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// Add this helper view for the notification badge
+struct NotificationBadge: View {
+    let count: Int
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.blue)
+            Text("\(count)")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(width: 24, height: 24)
     }
 }
